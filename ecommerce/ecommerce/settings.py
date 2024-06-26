@@ -91,9 +91,6 @@ DATABASES = {
     }
 }
 
-# git
-# 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
-
 
 # Password validation
 # https://docs.djangoproject.com/en/5.0/ref/settings/#auth-password-validators
