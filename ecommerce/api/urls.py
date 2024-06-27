@@ -11,6 +11,7 @@ from drf_yasg.views import get_schema_view
 from drf_yasg import openapi
 from rest_framework import permissions
 
+# to generate documentation
 schema_view = get_schema_view(
     openapi.Info(
         title="E-commerce API",
@@ -30,24 +31,21 @@ router.register(r"reviews", ReviewViewSet)
 urlpatterns = [
     path("", include(router.urls)),
     path("register/", RegisterView.as_view(), name="register"),
-    path("admin-register/", RegisterAdminView.as_view(), name="admin"),
     path("login/", LoginView.as_view(), name="login"),
     path("logout/", LogoutView.as_view(), name="logout"),
     path("token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("token/verify/", TokenVerifyView.as_view(), name="token_verify"),
     path("users/", UserView.as_view(), name="users"),
     path("products/", ProductList.as_view()),
-    path("products//", ProductDetail.as_view()),
+    path("products/<int:pk>/", ProductDetail.as_view()),
     path("categories/", CategoryList.as_view()),
-    path("categories//", CategoryDetail.as_view()),
-    path("productcategories/", ProductCategoryList.as_view()),
-    path("productcategories//", ProductCategoryDetail.as_view()),
+    path("categories/<int:pk>/", CategoryDetail.as_view()),
     path("cart/", CartAPI.as_view(), name="cart"),
     path(
         "swagger/",
         schema_view.with_ui("swagger", cache_timeout=0),
         name="schema-swagger-ui",
-    ),
+    ),  # for documentation
 ]
 
 

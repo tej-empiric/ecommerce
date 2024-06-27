@@ -52,18 +52,16 @@ class Product(models.Model):
     is_available = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     modified_at = models.DateTimeField(auto_now=True)
-    categories = models.ManyToManyField(Category, through="ProductCategory")
+    category = models.ForeignKey(
+        Category,
+        related_name="products",
+        blank=True,
+        null=True,
+        on_delete=models.SET_NULL,
+    )
 
     def __str__(self):
         return self.name
-
-
-class ProductCategory(models.Model):
-    product = models.ForeignKey(Product, on_delete=models.CASCADE)
-    category = models.ForeignKey(Category, on_delete=models.CASCADE)
-
-    def __str__(self):
-        return f"{self.product.name} - {self.category.name}"
 
 
 class Order(models.Model):
@@ -73,7 +71,7 @@ class Order(models.Model):
     ordered_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"Order {self.id} by {self.user.username} for {self.product.name}"
+        return f"Order {self.id} by {self.user.email} for {self.product.name}"
 
 
 class Review(models.Model):
@@ -86,6 +84,4 @@ class Review(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"Review for {self.product.name} by {self.user.username}"
-
-
+        return f"Review for {self.product.name} by {self.user.email}"

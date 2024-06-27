@@ -9,6 +9,7 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.views import APIView
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .service import Cart
+from django_filters import rest_framework as filters
 
 
 class IsOwnerOrReadOnly(permissions.BasePermission):
@@ -20,16 +21,6 @@ class IsOwnerOrReadOnly(permissions.BasePermission):
 
 class RegisterView(generics.CreateAPIView):
     serializer_class = RegisterSerializer
-
-    def create(self, request, *args, **kwargs):
-        serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        user = serializer.save()
-        return Response({"user": serializer.data}, status=status.HTTP_201_CREATED)
-
-
-class RegisterAdminView(generics.CreateAPIView):
-    serializer_class = SuperUserSerializer
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
@@ -63,7 +54,7 @@ class UserView(generics.ListAPIView):
     def get_queryset(self):
         user = self.request.user
         if user.is_superuser == True:
-            return CustomUser.objects.all()
+            return CustomUser.objects.all().order_by("id")
         else:
             return Response(
                 {"detail": "You do not have permission to perform this action."},
@@ -71,11 +62,19 @@ class UserView(generics.ListAPIView):
             )
 
 
+class ProductFilter(filters.FilterSet):
+    category = filters.CharFilter(field_name="category__name", lookup_expr="icontains")
+
+    class Meta:
+        model = Product
+        fields = ["category", "price"]
+
+
 class ProductList(generics.ListCreateAPIView):
     queryset = Product.objects.all()
     serializer_class = ProductSerializer
     permission_classes = [permissions.IsAuthenticated]
-    filterset_fields = ["category", "price"]
+    filterset_class = ProductFilter
     search_fields = ["name", "description"]
 
 
@@ -88,18 +87,9 @@ class ProductDetail(generics.RetrieveUpdateDestroyAPIView):
 
 
 class CategoryList(generics.ListCreateAPIView):
+    queryset = Category.objects.all()
     serializer_class = CategorySerializer
     permission_classes = [permissions.IsAuthenticated]
-
-    def get_queryset(self):
-        user = self.request.user
-        if user.is_superuser == True:
-            return Category.objects.all()
-        else:
-            return Response(
-                {"detail": "You do not have permission to perform this action."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
 
 
 class CategoryDetail(generics.RetrieveUpdateDestroyAPIView):
@@ -116,19 +106,7 @@ class CategoryDetail(generics.RetrieveUpdateDestroyAPIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-
-class ProductCategoryList(generics.ListCreateAPIView):
-    queryset = ProductCategory.objects.all()
-    serializer_class = ProductCategorySerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-
-class ProductCategoryDetail(generics.RetrieveUpdateDestroyAPIView):
-    queryset = ProductCategory.objects.all()
-    serializer_class = ProductCategorySerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-
+       
 class CartAPI(APIView):
 
     def get(self, request, format=None):

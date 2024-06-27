@@ -6,9 +6,7 @@ from .models import Product
 
 class Cart:
     def __init__(self, request):
-        """
-        initialize the cart
-        """
+
         self.session = request.session
         cart = self.session.get(settings.CART_SESSION_ID)
         if not cart:
@@ -34,9 +32,7 @@ class Cart:
         self.save()
 
     def remove(self, product):
-        """
-        Remove a product from the cart
-        """
+        # remove product from cart
         product_id = str(product["id"])
 
         if product_id in self.cart:
