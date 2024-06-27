@@ -174,3 +174,7 @@ SIMPLE_JWT = {
 }
 
 CART_SESSION_ID = "cart"
+
+
+
+

@@ -79,7 +79,7 @@ class ProductList(generics.ListCreateAPIView):
 
 
 class ProductDetail(generics.RetrieveUpdateDestroyAPIView):
-    queryset = Product.objects.all()
+    queryset = Product.objects.all().order_by("id")
     serializer_class = ProductSerializer
     permission_classes = [permissions.IsAuthenticated]
     filterset_fields = ["category", "price"]
@@ -87,7 +87,7 @@ class ProductDetail(generics.RetrieveUpdateDestroyAPIView):
 
 
 class CategoryList(generics.ListCreateAPIView):
-    queryset = Category.objects.all()
+    queryset = Category.objects.all().order_by("id")
     serializer_class = CategorySerializer
     permission_classes = [permissions.IsAuthenticated]
 
@@ -106,7 +106,7 @@ class CategoryDetail(generics.RetrieveUpdateDestroyAPIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-       
+
 class CartAPI(APIView):
 
     def get(self, request, format=None):
