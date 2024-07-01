@@ -92,9 +92,11 @@ class CategoryListSerializer(serializers.ModelSerializer):
 
 
 class CartItemSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source="product.name", read_only=True)
+
     class Meta:
         model = CartItem
-        fields = ["id", "product", "quantity", "added_at"]
+        fields = ["id", "product", "product_name", "quantity", "added_at"]
         read_only_fields = ["added_at"]
 
 

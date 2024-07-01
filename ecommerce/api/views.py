@@ -205,7 +205,7 @@ class ListOrderView(generics.ListAPIView):
 
     def get_queryset(self):
         if self.request.user.is_staff:
-            return Order.objects.all()
+            return Order.objects.all().order_by("id")
         else:
             return Order.objects.filter(user=self.request.user)
 
