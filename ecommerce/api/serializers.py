@@ -71,22 +71,72 @@ class UserSerializer(serializers.ModelSerializer):
         ]
 
 
-class CategorySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Category
-        fields = "__all__"
-
-
 class ProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
         fields = "__all__"
 
 
+class CategorySerializer(serializers.ModelSerializer):
+    products = ProductSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Category
+        fields = ["id", "name", "products"]
+
+
+class CategoryListSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Category
+        fields = ["id", "name"]
+
+
+class CartItemSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CartItem
+        fields = ["id", "product", "quantity", "added_at"]
+        read_only_fields = ["added_at"]
+
+
+class CartSerializer(serializers.ModelSerializer):
+    items = CartItemSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Cart
+        fields = ["id", "user", "created_at", "items"]
+        read_only_fields = ["created_at", "items"]
+
+    def create(self, validated_data):
+        user = self.context["request"].user
+        cart, created = Cart.objects.get_or_create(user=user, defaults={})
+        return cart
+
+
+class OrderItemSerializer(serializers.ModelSerializer):
+    product_name = serializers.CharField(source="product.name", read_only=True)
+
+    class Meta:
+        model = OrderItem
+        fields = ["product", "product_name", "quantity", "price"]
+
+
 class OrderSerializer(serializers.ModelSerializer):
+    items = OrderItemSerializer(many=True, source="order_items")
+    total_value = serializers.SerializerMethodField()
+
     class Meta:
         model = Order
-        fields = "__all__"
+        fields = ["id", "user", "created_at", "status", "items", "total_value"]
+
+    def get_total_value(self, obj):
+        return sum(item.price * item.quantity for item in obj.order_items.all())
+
+    def create(self, validated_data):
+        items_data = validated_data.pop("order_items")
+        order = Order.objects.create(**validated_data)
+        for item_data in items_data:
+            OrderItem.objects.create(order=order, **item_data)
+        return order
 
 
 class ReviewSerializer(serializers.ModelSerializer):
@@ -95,6 +145,3 @@ class ReviewSerializer(serializers.ModelSerializer):
     class Meta:
         model = Review
         fields = "__all__"
-
-
-

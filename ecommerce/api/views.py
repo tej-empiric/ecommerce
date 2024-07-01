@@ -1,15 +1,41 @@
 from django.shortcuts import render
+from rest_framework.response import Response
 from rest_framework import generics
+from django_filters import rest_framework as filters
+from rest_framework import status, viewsets, permissions, generics
+from rest_framework.permissions import IsAuthenticated
+from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
+from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
+from rest_framework_simplejwt.views import TokenObtainPairView
 from .models import *
 from .serializers import *
-from rest_framework import status, viewsets, permissions, generics
-from rest_framework.response import Response
-from rest_framework.permissions import IsAuthenticated
-from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework.views import APIView
-from rest_framework_simplejwt.views import TokenObtainPairView
-from .service import Cart
-from django_filters import rest_framework as filters
+
+
+class IsAdminOrReadOnly(permissions.BasePermission):
+
+    def has_permission(self, request, view):
+        if request.method in permissions.SAFE_METHODS:
+            return True
+
+        return request.user and request.user.is_staff
+
+
+class IsAdminOrOrderOwner(permissions.BasePermission):
+
+    def has_object_permission(self, request, view, obj):
+        if request.user and request.user.is_staff:
+            return True
+
+        if request.method in permissions.SAFE_METHODS:
+            return obj.user == request.user
+
+        if request.method == "PATCH":
+            return (
+                obj.user == request.user and request.data.get("status") == "Cancelled"
+            )
+
+        return False
 
 
 class IsOwnerOrReadOnly(permissions.BasePermission):
@@ -39,8 +65,8 @@ class LogoutView(APIView):
     def post(self, request):
         try:
             refresh_token = request.data["refresh_token"]
-            token = RefreshToken(refresh_token)
-            token.blacklist()
+            refreshtoken = RefreshToken(refresh_token)
+            refreshtoken.blacklist()
 
             return Response(status=status.HTTP_205_RESET_CONTENT)
         except Exception as e:
@@ -62,6 +88,18 @@ class UserView(generics.ListAPIView):
             )
 
 
+class CategoryList(generics.ListCreateAPIView):
+    queryset = Category.objects.all().order_by("id")
+    serializer_class = CategoryListSerializer
+    permission_classes = [IsAdminOrReadOnly]
+
+
+class CategoryDetail(generics.RetrieveUpdateDestroyAPIView):
+    queryset = Category.objects.all()
+    serializer_class = CategorySerializer
+    permission_classes = [IsAdminOrReadOnly]
+
+
 class ProductFilter(filters.FilterSet):
     category = filters.CharFilter(field_name="category__name", lookup_expr="icontains")
 
@@ -71,80 +109,111 @@ class ProductFilter(filters.FilterSet):
 
 
 class ProductList(generics.ListCreateAPIView):
-    queryset = Product.objects.all()
+    queryset = Product.objects.all().order_by("id")
     serializer_class = ProductSerializer
-    permission_classes = [permissions.IsAuthenticated]
+    permission_classes = [IsAdminOrReadOnly]
     filterset_class = ProductFilter
     search_fields = ["name", "description"]
 
 
 class ProductDetail(generics.RetrieveUpdateDestroyAPIView):
-    queryset = Product.objects.all().order_by("id")
+    queryset = Product.objects.all()
     serializer_class = ProductSerializer
-    permission_classes = [permissions.IsAuthenticated]
-    filterset_fields = ["category", "price"]
-    search_fields = ["name", "description"]
+    permission_classes = [IsAdminOrReadOnly]
 
 
-class CategoryList(generics.ListCreateAPIView):
-    queryset = Category.objects.all().order_by("id")
-    serializer_class = CategorySerializer
-    permission_classes = [permissions.IsAuthenticated]
-
-
-class CategoryDetail(generics.RetrieveUpdateDestroyAPIView):
-    serializer_class = CategorySerializer
+class CartViewSet(viewsets.ModelViewSet):
+    serializer_class = CartSerializer
     permission_classes = [permissions.IsAuthenticated]
 
     def get_queryset(self):
-        user = self.request.user
-        if user.is_superuser == True:
-            return Category.objects.all()
-        else:
+        return Cart.objects.filter(user=self.request.user)
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+
+class CartItemViewSet(viewsets.ModelViewSet):
+    serializer_class = CartItemSerializer
+    permission_classes = [permissions.IsAuthenticated]
+
+    def get_queryset(self):
+        return CartItem.objects.filter(cart__user=self.request.user)
+
+    def create(self, request, *args, **kwargs):
+        product_id = request.data.get("product")
+        quantity = request.data.get("quantity")
+
+        try:
+            cart = Cart.objects.get(user=request.user)
+        except Cart.DoesNotExist:
+            cart = Cart.objects.create(user=request.user)
+
+        product = Product.objects.get(pk=product_id)
+
+        cart_item, created = CartItem.objects.get_or_create(cart=cart, product=product)
+
+        if not created:
+            cart_item.quantity += int(quantity)
+            cart_item.save()
+
+        serializer = self.get_serializer(cart_item)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+
+class CreateOrderView(generics.CreateAPIView):
+    serializer_class = OrderSerializer
+    permission_classes = [IsAuthenticated]
+
+    def create(self, request, *args, **kwargs):
+        user = request.user
+        cart_items = CartItem.objects.filter(cart=user.cart)
+
+        if not cart_items.exists():
             return Response(
-                {"detail": "You do not have permission to perform this action."},
-                status=status.HTTP_403_FORBIDDEN,
+                {"error": "Cart is empty"}, status=status.HTTP_400_BAD_REQUEST
             )
 
+        order_data = {
+            "user": user.id,
+            "items": [
+                {
+                    "product": item.product.id,
+                    "quantity": item.quantity,
+                    "price": item.product.price,
+                }
+                for item in cart_items
+            ],
+        }
 
-class CartAPI(APIView):
+        serializer = self.get_serializer(data=order_data)
+        serializer.is_valid(raise_exception=True)
+        self.perform_create(serializer)
 
-    def get(self, request, format=None):
-        cart = Cart(request)
+        cart_items.delete()
+
+        headers = self.get_success_headers(serializer.data)
 
         return Response(
-            {"data": list(cart.__iter__()), "cart_total_price": cart.get_total_price()},
-            status=status.HTTP_200_OK,
+            serializer.data, status=status.HTTP_201_CREATED, headers=headers
         )
 
-    def post(self, request, **kwargs):
-        cart = Cart(request)
 
-        if "remove" in request.data:
-            product = request.data["product"]
-            cart.remove(product)
+class ListOrderView(generics.ListAPIView):
+    serializer_class = OrderSerializer
+    permission_classes = [permissions.IsAuthenticated]
 
-        elif "clear" in request.data:
-            cart.clear()
-
+    def get_queryset(self):
+        if self.request.user.is_staff:
+            return Order.objects.all()
         else:
-            product = request.data
-            cart.add(
-                product=product["product"],
-                quantity=product["quantity"],
-                overide_quantity=(
-                    product["overide_quantity"]
-                    if "overide_quantity" in product
-                    else False
-                ),
-            )
-
-        return Response({"message": "cart updated"}, status=status.HTTP_202_ACCEPTED)
+            return Order.objects.filter(user=self.request.user)
 
 
-class OrderViewSet(viewsets.ModelViewSet):
+class OrderRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Order.objects.all()
     serializer_class = OrderSerializer
+    permission_classes = [IsAdminOrOrderOwner]
 
 
 class ReviewViewSet(viewsets.ModelViewSet):
