@@ -93,20 +93,32 @@ class CategoryListSerializer(serializers.ModelSerializer):
 
 class CartItemSerializer(serializers.ModelSerializer):
     product_name = serializers.CharField(source="product.name", read_only=True)
+    product_price = serializers.CharField(source="product.price", read_only=True)
 
     class Meta:
         model = CartItem
-        fields = ["id", "product", "product_name", "quantity", "added_at"]
+        fields = [
+            "id",
+            "product",
+            "product_name",
+            "product_price",
+            "quantity",
+            "added_at",
+        ]
         read_only_fields = ["added_at"]
 
 
 class CartSerializer(serializers.ModelSerializer):
     items = CartItemSerializer(many=True, read_only=True)
+    total_value = serializers.SerializerMethodField()
 
     class Meta:
         model = Cart
-        fields = ["id", "user", "created_at", "items"]
+        fields = ["id", "user", "created_at", "items", "total_value"]
         read_only_fields = ["created_at", "items"]
+
+    def get_total_value(self, obj):
+        return sum(item.product.price * item.quantity for item in obj.items.all())
 
     def create(self, validated_data):
         user = self.context["request"].user
