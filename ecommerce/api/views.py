@@ -1,15 +1,14 @@
-from django.shortcuts import render
 from rest_framework.response import Response
 from rest_framework import generics
 from django_filters import rest_framework as filters
 from rest_framework import status, viewsets, permissions, generics
 from rest_framework.permissions import IsAuthenticated
-from rest_framework_simplejwt.tokens import RefreshToken, AccessToken
-from rest_framework_simplejwt.exceptions import TokenError, InvalidToken
+from rest_framework_simplejwt.tokens import RefreshToken
 from rest_framework_simplejwt.views import TokenObtainPairView
 from .models import *
 from .serializers import *
 from rest_framework.views import APIView
+from rest_framework.exceptions import ValidationError, PermissionDenied
 
 
 class IsAdminOrReadOnly(permissions.BasePermission):
@@ -68,9 +67,14 @@ class LogoutView(APIView):
             refreshtoken = RefreshToken(refresh_token)
             refreshtoken.blacklist()
 
-            return Response(status=status.HTTP_205_RESET_CONTENT)
+            return Response(
+                {"Log out successfull."}, status=status.HTTP_205_RESET_CONTENT
+            )
         except Exception as e:
-            return Response(status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {f"Error in Log out. {str(e)}, {status.HTTP_400_BAD_REQUEST}"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
 
 class UserView(generics.ListAPIView):
@@ -80,12 +84,9 @@ class UserView(generics.ListAPIView):
     def get_queryset(self):
         user = self.request.user
         if user.is_superuser == True:
-            return CustomUser.objects.all().order_by("id")
+            return CustomUser.objects.all().order_by("email")
         else:
-            return Response(
-                {"detail": "You do not have permission to perform this action."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
+            raise PermissionDenied("You do not have permission to perform this action.")
 
 
 class CategoryList(generics.ListCreateAPIView):
@@ -118,7 +119,7 @@ class ProductList(generics.ListCreateAPIView):
 
 class ProductDetail(generics.RetrieveUpdateDestroyAPIView):
     queryset = Product.objects.all()
-    serializer_class = ProductSerializer
+    serializer_class = ProductDetailSerializer
     permission_classes = [IsAdminOrReadOnly]
 
 
@@ -205,9 +206,9 @@ class ListOrderView(generics.ListAPIView):
 
     def get_queryset(self):
         if self.request.user.is_staff:
-            return Order.objects.all().order_by("id")
+            return Order.objects.all().order_by("-created_at")
         else:
-            return Order.objects.filter(user=self.request.user)
+            return Order.objects.filter(user=self.request.user).order_by("-created_at")
 
 
 class OrderRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
@@ -216,10 +217,24 @@ class OrderRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
     permission_classes = [IsAdminOrOrderOwner]
 
 
-class ReviewViewSet(viewsets.ModelViewSet):
-    queryset = Review.objects.all()
+class ReviewCreateView(generics.CreateAPIView):
     serializer_class = ReviewSerializer
-    permission_classes = [IsOwnerOrReadOnly]
+    permission_classes = [permissions.IsAuthenticated]
 
     def perform_create(self, serializer):
-        serializer.save(user=self.request.user)
+        user = self.request.user
+        product_id = self.request.data.get("product")
+
+        try:
+            product = OrderItem.objects.get(
+                order__user=user, order__status="Delivered", product_id=product_id
+            ).product
+        except OrderItem.DoesNotExist:
+            raise ValidationError(
+                "You can only review products that have been delivered."
+            )
+
+        if Review.objects.filter(user=user, product=product).exists():
+            raise ValidationError("You have already reviewed this product.")
+
+        serializer.save(user=user, product=product)

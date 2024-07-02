@@ -71,10 +71,63 @@ class UserSerializer(serializers.ModelSerializer):
         ]
 
 
+class ReviewSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Review
+        fields = ["id", "user", "product", "rating", "comment", "created_at"]
+        read_only_fields = ["user", "product", "created_at"]
+
+
 class ProductSerializer(serializers.ModelSerializer):
+    average_rating = serializers.SerializerMethodField()
+
     class Meta:
         model = Product
-        fields = "__all__"
+        fields = [
+            "id",
+            "name",
+            "price",
+            "description",
+            "image",
+            "is_available",
+            "created_at",
+            "modified_at",
+            "category",
+            "average_rating",
+        ]
+
+    def get_average_rating(self, obj):
+        reviews = Review.objects.filter(product=obj)
+        if reviews.exists():
+            return reviews.aggregate(average=models.Avg("rating"))["average"]
+        return 0
+
+
+class ProductDetailSerializer(serializers.ModelSerializer):
+    average_rating = serializers.SerializerMethodField()
+    reviews = ReviewSerializer(many=True, read_only=True)
+
+    class Meta:
+        model = Product
+        fields = [
+            "id",
+            "name",
+            "price",
+            "description",
+            "image",
+            "is_available",
+            "created_at",
+            "modified_at",
+            "category",
+            "average_rating",
+            "reviews",
+        ]
+
+    def get_average_rating(self, obj):
+        reviews = Review.objects.filter(product=obj)
+        if reviews.exists():
+            return reviews.aggregate(average=models.Avg("rating"))["average"]
+        return 0
 
 
 class CategorySerializer(serializers.ModelSerializer):
@@ -153,9 +206,6 @@ class OrderSerializer(serializers.ModelSerializer):
         return order
 
 
-class ReviewSerializer(serializers.ModelSerializer):
-    user = serializers.StringRelatedField()
 
-    class Meta:
-        model = Review
-        fields = "__all__"
+
+

@@ -24,7 +24,6 @@ schema_view = get_schema_view(
 
 
 router = DefaultRouter()
-router.register(r"reviews", ReviewViewSet)
 router.register(r"cart", CartViewSet, basename="cart")
 router.register(r"cart-items", CartItemViewSet, basename="cart-items")
 
@@ -36,7 +35,7 @@ urlpatterns = [
     path("logout/", LogoutView.as_view(), name="logout"),
     path("token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
     path("token/verify/", TokenVerifyView.as_view(), name="token_verify"),
-    path("users/", UserView.as_view(), name="users"),
+    path("admin/users/", UserView.as_view(), name="users"),
     path("products/", ProductList.as_view()),
     path("products/<int:pk>/", ProductDetail.as_view()),
     path("categories/", CategoryList.as_view()),
@@ -48,6 +47,7 @@ urlpatterns = [
         OrderRetrieveUpdateDestroyAPIView.as_view(),
         name="order-detail",
     ),
+    path("reviews/", ReviewCreateView.as_view(), name="create-review"),
     path(
         "swagger/",
         schema_view.with_ui("swagger", cache_timeout=0),

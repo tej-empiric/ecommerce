@@ -36,12 +36,18 @@ class CustomUser(AbstractBaseUser):
     def __str__(self):
         return self.email
 
+    class Meta:
+        ordering = ["email"]
+
 
 class Category(models.Model):
     name = models.CharField(max_length=200)
 
     def __str__(self):
         return self.name
+
+    class Meta:
+        ordering = ["id"]
 
 
 class Product(models.Model):
@@ -63,6 +69,9 @@ class Product(models.Model):
     def __str__(self):
         return self.name
 
+    class Meta:
+        ordering = ["name"]
+
 
 class Cart(models.Model):
     user = models.OneToOneField(
@@ -73,6 +82,9 @@ class Cart(models.Model):
     def __str__(self):
         return f"Cart of {self.user.email}"
 
+    class Meta:
+        ordering = ["-created_at"]
+
 
 class CartItem(models.Model):
     cart = models.ForeignKey(Cart, on_delete=models.CASCADE, related_name="items")
@@ -82,6 +94,9 @@ class CartItem(models.Model):
 
     def __str__(self):
         return f"{self.product.name} x {self.quantity}"
+
+    class Meta:
+        ordering = ["-added_at"]
 
 
 class Order(models.Model):
@@ -104,6 +119,9 @@ class Order(models.Model):
     def __str__(self):
         return f"Order {self.id} by {self.user.email}"
 
+    class Meta:
+        ordering = ["-created_at"]
+
 
 class OrderItem(models.Model):
     order = models.ForeignKey(
@@ -118,13 +136,20 @@ class OrderItem(models.Model):
 
 
 class Review(models.Model):
-    product = models.ForeignKey(
-        Product, related_name="reviews", on_delete=models.CASCADE
+    user = models.ForeignKey(
+        CustomUser, on_delete=models.CASCADE, related_name="reviews"
     )
-    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
-    rating = models.PositiveIntegerField()
-    comment = models.TextField()
+    product = models.ForeignKey(
+        Product, on_delete=models.CASCADE, related_name="reviews"
+    )
+    rating = models.IntegerField(choices=[(i, i) for i in range(1, 6)])
+    comment = models.TextField(blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"Review for {self.product.name} by {self.user.email}"
+        return f"Review of {self.product.name} by {self.user.email}"
+
+    class Meta:
+        ordering = ["-created_at"]
+
+
