@@ -64,8 +64,8 @@ class LogoutView(APIView):
     def post(self, request):
         try:
             refresh_token = request.data["refresh_token"]
-            refreshtoken = RefreshToken(refresh_token)
-            refreshtoken.blacklist()
+            refreshToken = RefreshToken(refresh_token)
+            refreshToken.blacklist()
 
             return Response(
                 {"Log out successfull."}, status=status.HTTP_205_RESET_CONTENT
@@ -150,7 +150,10 @@ class CartItemViewSet(viewsets.ModelViewSet):
         except Cart.DoesNotExist:
             cart = Cart.objects.create(user=request.user)
 
-        product = Product.objects.get(pk=product_id)
+        try:
+            product = Product.objects.get(pk=product_id)
+        except Product.DoesNotExist:
+            return Response({"error": "Product does not exist"})
 
         cart_item, created = CartItem.objects.get_or_create(cart=cart, product=product)
 
@@ -189,6 +192,7 @@ class CreateOrderView(generics.CreateAPIView):
 
         serializer = self.get_serializer(data=order_data)
         serializer.is_valid(raise_exception=True)
+
         self.perform_create(serializer)
 
         cart_items.delete()
@@ -222,6 +226,7 @@ class ReviewCreateView(generics.CreateAPIView):
     permission_classes = [permissions.IsAuthenticated]
 
     def perform_create(self, serializer):
+
         user = self.request.user
         product_id = self.request.data.get("product")
 
@@ -229,6 +234,7 @@ class ReviewCreateView(generics.CreateAPIView):
             product = OrderItem.objects.get(
                 order__user=user, order__status="Delivered", product_id=product_id
             ).product
+
         except OrderItem.DoesNotExist:
             raise ValidationError(
                 "You can only review products that have been delivered."
