@@ -143,7 +143,6 @@ class CartItemViewSet(viewsets.ModelViewSet):
 
     def create(self, request, *args, **kwargs):
         product_id = request.data.get("product")
-        quantity = request.data.get("quantity")
 
         try:
             cart = Cart.objects.get(user=request.user)
@@ -152,17 +151,47 @@ class CartItemViewSet(viewsets.ModelViewSet):
 
         try:
             product = Product.objects.get(pk=product_id)
+
         except Product.DoesNotExist:
             return Response({"error": "Product does not exist"})
 
-        cart_item, created = CartItem.objects.get_or_create(cart=cart, product=product)
+        if product.is_available == False:
+            return Response({"error": "Product is out of stock"})
 
-        if not created:
-            cart_item.quantity += int(quantity)
-            cart_item.save()
+        cart_item = CartItem.objects.create(cart=cart, product=product)
 
         serializer = self.get_serializer(cart_item)
         return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+    def partial_update(self, request, *args, **kwargs):
+        instance = self.get_object()
+        new_quantity = request.data.get("quantity")
+
+        if new_quantity is not None:
+            try:
+                new_quantity = int(new_quantity)
+                if new_quantity <= 0:
+                    return Response(
+                        {"error": "Quantity must be a positive integer"},
+                        status=status.HTTP_400_BAD_REQUEST,
+                    )
+            except ValueError:
+                return Response(
+                    {"error": "Quantity must be an integer"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            if instance.product.quantity < new_quantity:
+                return Response(
+                    {"error": "Not enough quantity available"},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+            instance.quantity = new_quantity
+            instance.save()
+
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
 
 
 class CreateOrderView(generics.CreateAPIView):
@@ -190,10 +219,25 @@ class CreateOrderView(generics.CreateAPIView):
             ],
         }
 
+        for item in cart_items:
+            product = item.product
+            if item.quantity > product.quantity:
+                return Response(
+                    {"error": f"Not enough {product.name} available."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
+
+        # create order
         serializer = self.get_serializer(data=order_data)
         serializer.is_valid(raise_exception=True)
 
         self.perform_create(serializer)
+
+        # update product quantity
+        for item in cart_items:
+            product = item.product
+            product.quantity -= item.quantity
+            product.save()
 
         cart_items.delete()
 
@@ -229,11 +273,19 @@ class ReviewCreateView(generics.CreateAPIView):
 
         user = self.request.user
         product_id = self.request.data.get("product")
+        rating = self.request.data.get("rating")
+
+        if rating is None or not (1 <= int(rating) <= 5):
+            raise ValidationError("Rating must be between 1 and 5.")
 
         try:
-            product = OrderItem.objects.get(
-                order__user=user, order__status="Delivered", product_id=product_id
-            ).product
+            product = (
+                OrderItem.objects.filter(
+                    order__user=user, order__status="Delivered", product_id=product_id
+                )
+                .first()
+                .product
+            )
 
         except OrderItem.DoesNotExist:
             raise ValidationError(

@@ -110,6 +110,7 @@ class ReviewSerializer(serializers.ModelSerializer):
         read_only_fields = ["user", "product", "created_at"]
 
 
+
 class ProductSerializer(serializers.ModelSerializer):
     average_rating = serializers.SerializerMethodField()
 
@@ -122,6 +123,7 @@ class ProductSerializer(serializers.ModelSerializer):
             "description",
             "image",
             "is_available",
+            "quantity",
             "created_at",
             "modified_at",
             "category",
@@ -148,6 +150,7 @@ class ProductDetailSerializer(serializers.ModelSerializer):
             "description",
             "image",
             "is_available",
+            "quantity",
             "created_at",
             "modified_at",
             "category",
@@ -217,6 +220,7 @@ class OrderItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrderItem
         fields = ["product", "product_name", "quantity", "price"]
+
 
 
 class OrderSerializer(serializers.ModelSerializer):

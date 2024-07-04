@@ -65,12 +65,20 @@ class Product(models.Model):
         null=True,
         on_delete=models.SET_NULL,
     )
+    quantity = models.PositiveIntegerField(default=1)
 
-    def __str__(self):
-        return self.name
+    def save(self, *args, **kwargs):
+        if self.quantity == 0:
+            self.is_available = False
+        else:
+            self.is_available = True
+        super().save(*args, **kwargs)
 
     class Meta:
         ordering = ["name"]
+
+    def __str__(self):
+        return self.name
 
 
 class Cart(models.Model):
@@ -151,5 +159,3 @@ class Review(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
-
-
