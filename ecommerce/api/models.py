@@ -47,9 +47,8 @@ class ReferralCode(models.Model):
     code = models.CharField(max_length=154, unique=True)
 
     def generate_code(self):
-        username = self.user.email
-        random_code = secrets.token_hex(2)
-        return username + random_code
+        random_code = secrets.token_hex(5)
+        return random_code
 
     def save(self, *args, **kwargs):
         self.code = self.generate_code()
@@ -58,7 +57,6 @@ class ReferralCode(models.Model):
 
 
 class Referral(models.Model):
-
 
     referred_by = models.ForeignKey(
         CustomUser,

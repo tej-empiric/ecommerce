@@ -55,7 +55,6 @@ class RegisterSerializer(serializers.ModelSerializer):
 
         return value
 
-
     def create(self, validated_data):
         referral_code = validated_data.pop("referral_code", None)
         referred_by = None
@@ -63,7 +62,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             try:
                 referred_by = ReferralCode.objects.get(code=referral_code).user
             except ObjectDoesNotExist:
-                pass
+                raise serializers.ValidationError("please enter correct referral code")
         password = validated_data.pop("password")
         user = CustomUser.objects.create(**validated_data)
         user.set_password(password)

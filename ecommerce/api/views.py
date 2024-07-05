@@ -321,11 +321,9 @@ class ReferralView(views.APIView):
     def post(self, request):
         data = request.data
         serializer = ReferralCodeSerializer(data=data, context={"request": request})
-        print("Request")
+
         if serializer.is_valid():
-            print("Valid")
             serializer.save()
-            print("saved")
             return Response(
                 {
                     "msg": f"Referral code sent to {serializer.validated_data.get('to_email')}"
