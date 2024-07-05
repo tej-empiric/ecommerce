@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
 from django.db import models
+import secrets
 
 
 class CustomUserManager(BaseUserManager):
@@ -38,6 +39,42 @@ class CustomUser(AbstractBaseUser):
 
     class Meta:
         ordering = ["email"]
+
+
+class ReferralCode(models.Model):
+
+    user = models.ForeignKey(CustomUser, on_delete=models.CASCADE)
+    code = models.CharField(max_length=154, unique=True)
+
+    def generate_code(self):
+        username = self.user.email
+        random_code = secrets.token_hex(2)
+        return username + random_code
+
+    def save(self, *args, **kwargs):
+        self.code = self.generate_code()
+
+        return super(ReferralCode, self).save(*args, **kwargs)
+
+
+class Referral(models.Model):
+
+
+    referred_by = models.ForeignKey(
+        CustomUser,
+        unique=False,
+        on_delete=models.DO_NOTHING,
+        related_query_name="my_referral",
+    )
+    referred_to = models.OneToOneField(
+        CustomUser, on_delete=models.DO_NOTHING, related_query_name="has_referred"
+    )
+
+
+class Wallet(models.Model):
+
+    user = models.OneToOneField(CustomUser, on_delete=models.DO_NOTHING)
+    credits = models.FloatField(default=0.0)
 
 
 class Category(models.Model):

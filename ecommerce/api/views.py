@@ -9,6 +9,9 @@ from .models import *
 from .serializers import *
 from rest_framework.views import APIView
 from rest_framework.exceptions import ValidationError, PermissionDenied
+from rest_framework import views
+from rest_framework.parsers import JSONParser
+from django.http import HttpResponse, JsonResponse
 
 
 class IsAdminOrReadOnly(permissions.BasePermission):
@@ -276,7 +279,7 @@ class ReviewCreateView(generics.CreateAPIView):
         rating = self.request.data.get("rating")
 
         if rating is None or not (1 <= int(rating) <= 5):
-            raise ValidationError("Rating must be between 1 and 5.")
+            raise ValidationError("Rating must be between 1 to 5.")
 
         try:
             product = (
@@ -296,3 +299,37 @@ class ReviewCreateView(generics.CreateAPIView):
             raise ValidationError("You have already reviewed this product.")
 
         serializer.save(user=user, product=product)
+
+
+class WalletDetailView(views.APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        wallet = Wallet.objects.get(user=request.user)
+        serializer = WalletSerializer(wallet)
+        return JsonResponse(serializer.data, status=200)
+
+
+class ReferralView(views.APIView):
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        code = ReferralCode.objects.get(user=request.user)
+        serializer = ReferralCodeSerializer(code)
+        return JsonResponse(serializer.data, status=200)
+
+    def post(self, request):
+        data = request.data
+        serializer = ReferralCodeSerializer(data=data, context={"request": request})
+        print("Request")
+        if serializer.is_valid():
+            print("Valid")
+            serializer.save()
+            print("saved")
+            return Response(
+                {
+                    "msg": f"Referral code sent to {serializer.validated_data.get('to_email')}"
+                },
+                status=202,
+            )
+        return Response(serializer.errors, status=400)

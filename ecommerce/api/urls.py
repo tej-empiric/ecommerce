@@ -48,6 +48,8 @@ urlpatterns = [
         name="order-detail",
     ),
     path("reviews/", ReviewCreateView.as_view(), name="create-review"),
+    path("wallet/", WalletDetailView.as_view(), name="wallet-details"),
+    path("referral/", ReferralView.as_view(), name="referral"),
     path(
         "swagger/",
         schema_view.with_ui("swagger", cache_timeout=0),

@@ -6,9 +6,14 @@ from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
+from django.core.exceptions import ObjectDoesNotExist
+from .services import CreateReferral, SendReferral
 
 
 class RegisterSerializer(serializers.ModelSerializer):
+    referral_code = serializers.CharField(
+        max_length=154, write_only=True, required=False, allow_blank=True
+    )
     password = serializers.CharField(write_only=True)
 
     class Meta:
@@ -18,6 +23,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             "last_name",
             "email",
             "password",
+            "referral_code",
         ]
 
     def validate_password(self, value):
@@ -49,14 +55,50 @@ class RegisterSerializer(serializers.ModelSerializer):
 
         return value
 
+
     def create(self, validated_data):
-        user = CustomUser.objects.create_user(
-            first_name=validated_data["first_name"],
-            last_name=validated_data["last_name"],
-            email=validated_data.get("email"),
-            password=validated_data["password"],
-        )
+        referral_code = validated_data.pop("referral_code", None)
+        referred_by = None
+        if referral_code:
+            try:
+                referred_by = ReferralCode.objects.get(code=referral_code).user
+            except ObjectDoesNotExist:
+                pass
+        password = validated_data.pop("password")
+        user = CustomUser.objects.create(**validated_data)
+        user.set_password(password)
+        user.save()
+        if referred_by:
+            referral = CreateReferral(referred_by=referred_by, referred_to=user)
+            referral.new_referral()
+            for value in (referred_by, user):
+                wallet = Wallet.objects.get(user=value)
+                wallet.credits += 100
+                wallet.save()
         return user
+
+
+class WalletSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Wallet
+        fields = ["credits"]
+
+
+class ReferralCodeSerializer(serializers.ModelSerializer):
+    to_email = serializers.EmailField(write_only=True)
+
+    class Meta:
+        model = ReferralCode
+        fields = ["code", "to_email"]
+        extra_kwargs = {"code": {"read_only": True}}
+
+    def create(self, validated_data):
+        to_email = validated_data.get("to_email")
+        current_user = self.context["request"].user
+        code = ReferralCode.objects.get(user=current_user).code
+        sendReferral = SendReferral(mail_id=to_email, referral_code=code)
+        sendReferral.send_referral_mail()
+        return validated_data
 
 
 class LoginSerializer(TokenObtainPairSerializer):
@@ -108,7 +150,6 @@ class ReviewSerializer(serializers.ModelSerializer):
         model = Review
         fields = ["id", "user", "product", "rating", "comment", "created_at"]
         read_only_fields = ["user", "product", "created_at"]
-
 
 
 class ProductSerializer(serializers.ModelSerializer):
@@ -220,7 +261,6 @@ class OrderItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrderItem
         fields = ["product", "product_name", "quantity", "price"]
-
 
 
 class OrderSerializer(serializers.ModelSerializer):
